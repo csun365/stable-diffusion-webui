@@ -63,6 +63,12 @@ class CFGDenoiserTimesteps(CFGDenoiser):
 
         return pred_x0
 
+    def get_pred_noise(self, x, x_out):
+        return x_out
+
+    def from_pred_noise(self, x, pred_noise):
+        return pred_noise
+
     @property
     def inner_model(self):
         if self.model_wrap is None:
