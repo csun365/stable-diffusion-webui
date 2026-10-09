@@ -90,6 +90,26 @@ class CFGDenoiser(torch.nn.Module):
     def get_pred_x0(self, x_in, x_out, sigma):
         return x_out
 
+    def get_pred_noise(self, x, x_out):
+        """returns a prediction proportional to the noise (sigma * eps); x_out of k-diffusion denoisers is the denoised (x0) prediction"""
+        return x - x_out
+
+    def from_pred_noise(self, x, pred_noise):
+        return x - pred_noise
+
+    def rescale_cfg(self, x, denoised, x_out, conds_list, uncond, phi):
+        """CFG Rescale from https://arxiv.org/abs/2305.08891, section 3.4; done in noise space, so the result is the same for k-diffusion and timestep samplers"""
+        positive = self.combine_denoised(x_out, conds_list, uncond, 1.0)
+
+        guided = self.get_pred_noise(x, denoised)
+        positive = self.get_pred_noise(x, positive)
+
+        dims = tuple(range(1, guided.ndim))
+        std_ratio = positive.std(dim=dims, keepdim=True) / guided.std(dim=dims, keepdim=True).clamp(min=1e-8)
+        rescaled = guided * (phi * std_ratio + (1.0 - phi))
+
+        return self.from_pred_noise(x, rescaled)
+
     def update_inner_model(self):
         self.model_wrap = None
 
@@ -287,6 +307,10 @@ class CFGDenoiser(torch.nn.Module):
             denoised = self.combine_denoised(x_out, conds_list, uncond, 1.0)
         else:
             denoised = self.combine_denoised(x_out, conds_list, uncond, cond_scale * self.cond_scale_miltiplier)
+
+            if shared.opts.cfg_rescale != 0:
+                denoised = self.rescale_cfg(x, denoised, x_out, conds_list, uncond, shared.opts.cfg_rescale)
+                self.p.extra_generation_params["CFG Rescale"] = shared.opts.cfg_rescale
 
         # Blend in the original latents (after)
         if not self.mask_before_denoising and self.mask is not None:
