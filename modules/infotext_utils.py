@@ -357,6 +357,9 @@ Steps: 20, Sampler: Euler a, CFG scale: 7, Seed: 965400086, Size: 512x512, Model
     if "Schedule rho" not in res:
         res["Schedule rho"] = 0
 
+    if "CFG Rescale" not in res:
+        res["CFG Rescale"] = 0
+
     if "VAE Encoder" not in res:
         res["VAE Encoder"] = "Full"
 
