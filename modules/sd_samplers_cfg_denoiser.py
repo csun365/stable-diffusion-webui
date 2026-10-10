@@ -90,6 +90,19 @@ class CFGDenoiser(torch.nn.Module):
     def get_pred_x0(self, x_in, x_out, sigma):
         return x_out
 
+    def get_karras_sigma(self, sigma):
+        """noise level sigma in the x_t = x0 + sigma * eps parameterization; k-diffusion samplers already pass it"""
+        return sigma
+
+    def in_guidance_interval(self, sigma):
+        """Kynkaanniemi et al. 2024, https://arxiv.org/abs/2404.07724: CFG is applied only for sigma in (low, high]; 0 disables either bound"""
+        low, high = shared.opts.guidance_interval_low, shared.opts.guidance_interval_high
+        if low == 0 and high == 0:
+            return True
+
+        s = float(self.get_karras_sigma(sigma[:1])[0])
+        return s > low and (high == 0 or s <= high)
+
     def update_inner_model(self):
         self.model_wrap = None
 
@@ -225,6 +238,14 @@ class CFGDenoiser(torch.nn.Module):
             self.p.extra_generation_params["NGMS"] = s_min_uncond
             if shared.opts.s_min_uncond_all:
                 self.p.extra_generation_params["NGMS all steps"] = shared.opts.s_min_uncond_all
+        elif not is_edit_model and not self.in_guidance_interval(sigma):
+            skip_uncond = True
+
+        if not is_edit_model:
+            if shared.opts.guidance_interval_low != 0:
+                self.p.extra_generation_params["Guidance interval low"] = shared.opts.guidance_interval_low
+            if shared.opts.guidance_interval_high != 0:
+                self.p.extra_generation_params["Guidance interval high"] = shared.opts.guidance_interval_high
 
         if skip_uncond:
             x_in = x_in[:-batch_size]
