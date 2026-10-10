@@ -63,6 +63,10 @@ class CFGDenoiserTimesteps(CFGDenoiser):
 
         return pred_x0
 
+    def get_karras_sigma(self, sigma):
+        a_t = self.alphas[sigma.to(dtype=int)]
+        return ((1 - a_t) / a_t).sqrt()
+
     @property
     def inner_model(self):
         if self.model_wrap is None:
